@@ -82,7 +82,7 @@ defaults = {
     "approx_bf_try_per_sec" : 10, # This is simulator specific (limiting backfilling to approximate CPU limitations)
     "approx_excess_assocs" : 0, # This is simulator specific (see above)
     "bd_threshold" : 60, # This is the threshold used when calculating bounded slowdown
-    "hpe_restrictlong_sliding_reservations" : "const", # This is cluster (Lumi?) specific
+    "hpe_restrictlong_sliding_reservations" : "", # This is cluster (Lumi?) specific; "" disables it
     "nodes_down_in_blades" : False, # This is cluster (Lumi?) specific (when a node is down, all nodes in the blade are placed in down state)
 }
 
