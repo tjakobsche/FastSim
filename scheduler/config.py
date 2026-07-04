@@ -84,6 +84,12 @@ defaults = {
     "bd_threshold" : 60, # This is the threshold used when calculating bounded slowdown
     "hpe_restrictlong_sliding_reservations" : "", # This is cluster (Lumi?) specific; "" disables it
     "nodes_down_in_blades" : False, # This is cluster (Lumi?) specific (when a node is down, all nodes in the blade are placed in down state)
+    "system" : "default", # System identifier for node-naming conventions (e.g. "kestrel")
+    "initialize" : True, # Whether to build an initial running/queued state at sim_start
+    "Pdefault" : 600, # Default power-per-node in W (fallback when job energy data is missing)
+    "max_switch_nodes" : 256, # Maximum size of a job that might be constrained by max_switch_wait
+    "impromptu_reservation_names" : [], # Reservation names treated as reactive holds (no advance draining)
+    "save_interval_steps" : 50000, # How many steps elapse between saving intermediate results
 }
 
 
@@ -105,10 +111,11 @@ vals_bool = ["JobRequeue"]
 # TODO Include node/partition information dump once setup to read this
 mandatory_fields = set(
     (
-        "assocs_dump", "node_events_dump", 
-        "resv_dump_current", "resv_dump_historic", 
+        "assocs_dump", "node_events_dump",
+        "resv_dump_current", "resv_dump_historic",
         "job_dump", "slurm_conf",
-        "considered_partitions", "qos_dump"
+        "considered_partitions", "qos_dump",
+        "sim_start", "sim_end"
     )
 )
 
