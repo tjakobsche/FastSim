@@ -214,6 +214,11 @@ class SlurmDataReader:
             'NODELIST': merged_nodes,
         })
 
+        # With no reservations the rebuilt columns default to float64, which breaks
+        # datetime comparisons downstream (e.g. empty dumps from trace-only setups).
+        merged_df['START_TIME'] = pd.to_datetime(merged_df['START_TIME'])
+        merged_df['END_TIME'] = pd.to_datetime(merged_df['END_TIME'])
+
         return merged_df
 
     def get_node_and_partition_data_from_slurm_conf(self, considered_partitions):
