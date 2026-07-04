@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
 from datetime import timedelta
 from collections import namedtuple
 
@@ -119,12 +120,28 @@ mandatory_fields = set(
     )
 )
 
+# Config fields holding filepaths; relative values are resolved against the
+# directory containing the YAML config file, not the current working directory.
+path_fields = (
+    "assocs_dump", "qos_dump", "node_events_dump", "resv_dump_current",
+    "resv_dump_historic", "job_dump", "slurm_conf",
+    "supplementary_resv", "predicted_power", "predicted_runtime", "re_fp",
+)
+
 def get_config(config_file):
     print("Reading config from {}".format(config_file))
 
     # Read the config file chosen from ../configs directory
     with open(config_file) as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
+
+    # Resolve relative dump paths against the config file's own directory so
+    # runs behave the same regardless of the current working directory.
+    config_dir = os.path.dirname(os.path.abspath(config_file))
+    for field in path_fields:
+        val = config_dict.get(field)
+        if isinstance(val, str) and val and not os.path.isabs(val):
+            config_dict[field] = os.path.normpath(os.path.join(config_dir, val))
 
     # Read the slurm.conf file in slurm_dump
     with open(config_dict["slurm_conf"], "r") as f:
