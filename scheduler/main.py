@@ -243,7 +243,7 @@ def main(args):
         return
 
     # Offline mode
-    run_logs = setup_run_logs(args.output, '../')
+    run_logs = setup_run_logs(args.output)
 
     controller = Controller(
         args.config_file, args.output, run_logs=run_logs

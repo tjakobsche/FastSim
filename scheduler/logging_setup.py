@@ -29,11 +29,15 @@ def _make_file_logger(name: str, fp: Path) -> logging.Logger:
 
 def setup_run_logs(results_filepath: str | Path, log_dir: str | Path | None = None) -> RunLogs:
     results_path = Path(results_filepath)
-    base_name = results_path.stem
+    base_name = results_path.stem or "run"
 
     if log_dir is None:
-        # Put logs next to output by default
-        log_dir_path = results_path.resolve().parent / "logs"
+        if results_path.name:
+            # Put logs next to output by default
+            log_dir_path = results_path.resolve().parent / "logs"
+        else:
+            # No --output given; keep logs under the current directory
+            log_dir_path = Path("logs").resolve()
     else:
         log_dir_path = Path(log_dir).expanduser().resolve()
 
