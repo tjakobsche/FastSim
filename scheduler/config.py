@@ -26,19 +26,23 @@ from collections import namedtuple
 
 import yaml
 
-# NOTE Priority weight defaults are set to ARCHER2 defaults currently
+# NOTE Defaults below match stock Slurm defaults (slurm.conf man page) unless marked
+# simulator-specific. Slurm.conf and the YAML config can override any of them.
 # NOTE: approx_excess_assocs remove a number of unused in workload traceassocs from the assoc tree,
 # this is relevant since the fairshare factor scales with the tot number of user assocs. This
 # happend because to capture all assocs they need to be dumped "withDeleted" so you end up with
 # some assocs that never existed at any given time.
 defaults = {
-    "defer" : True, # Setting this option will avoid attempting to schedule each job individually 
-                     # at job submit time, but defer it until a later time when scheduling multiple jobs 
+    "defer" : True, # Setting this option will avoid attempting to schedule each job individually
+                     # at job submit time, but defer it until a later time when scheduling multiple jobs
                      # simultaneously may be possible.
+                     # NOTE: Stock Slurm has defer OFF by default, but the simulation loop hardcodes
+                     # defer-on behavior and never reads this value (see controller.run_sim).
     "default_queue_depth" : 100, # The default number of jobs to attempt scheduling (i.e. the queue depth) 
                                  # when a running job completes or other routine actions occur
     "sched_interval" : 60, # How frequently, in seconds, the main scheduling loop will execute and test all pending jobs
-    "sched_min_interval" : 2000000, # How frequently, in microseconds, the main scheduling loop will execute and test any pending jobs.
+    "sched_min_interval" : 2, # How frequently, in microseconds, the main scheduling loop will execute and test any pending jobs.
+                              # Stock Slurm default is 2 microseconds; ARCHER2 used 2000000 (2 s).
                                     # The scheduler runs in a limited fashion every time that any event happens which could enable a job 
                                     # to start (e.g. job submit, job terminate, etc.). If these events happen at a high frequency, the 
                                     # scheduler can run very frequently and consume significant resources if not throttled by this option. 
@@ -54,8 +58,10 @@ defaults = {
                                    # This specifies the times when the locks are relinquished in microseconds.
     "bf_yield_sleep" : 500000, # The backfill scheduler will periodically relinquish locks in order for other pending operations to take place. 
                                # This specifies the length of time for which the locks are relinquished in microseconds.
-    "bf_continue" : True, # Setting this option will cause the backfill scheduler to continue processing pending jobs from its original job list 
+    "bf_continue" : True, # Setting this option will cause the backfill scheduler to continue processing pending jobs from its original job list
                            # after releasing locks even if job or node state changes.
+                           # NOTE: Stock Slurm has bf_continue OFF by default, but the simulation loop hardcodes
+                           # bf_continue-on behavior and never reads this value (see controller.run_sim).
     
     "PriorityCalcPeriod" : 5, # The period of time in minutes in which the half-life decay will be re-calculated.
     "PriorityMaxAge" : 7, # Specifies the job age which will be given the maximum age factor in computing priority. 
@@ -77,7 +83,10 @@ defaults = {
                       # jobs will not be requeued unless explicitly enabled by the user.
     "KillWait" : 30, # The interval, in seconds, given to a job's processes between the SIGTERM and SIGKILL signals upon reaching its time limit.
     "OverTimeLimit" : 0, # Number of minutes by which a job can exceed its time limit before being canceled.
-    "max_switch_wait": 172800, # Max number of seconds to wait for nodes on the same rack, before scheduling a job with nodes on different racks
+    "max_switch_wait": 0, # Max number of seconds to wait for nodes on the same rack, before scheduling a job with nodes on different racks.
+                          # 0 bypasses the wait. FastSim applies this to ALL jobs <= max_switch_nodes (an ARCHER2/Cray placement
+                          # policy); stock Slurm only waits for switches when a job explicitly requests --switches, so 0 is the
+                          # closest stock behavior. ARCHER2 used 172800 (48 h).
 
     # Simulator-specific parameters (not specific to Slurm)
     "approx_bf_try_per_sec" : 10, # This is simulator specific (limiting backfilling to approximate CPU limitations)
