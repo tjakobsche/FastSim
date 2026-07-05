@@ -147,7 +147,10 @@ class Controller:
         print_and_log(self.print_log, 'Initializing node and partition data.'.rjust(100,'.'))
         nid_data, partition_data, valid_resv, resv_end_times, hpe_restrictlong = self.data_reader.get_nodes_partitions(
             self.config.considered_partitions, self.config.hpe_restrictlong_sliding_reservations,
-            df_jobs.End.max(), self.config.nodes_down_in_blades, self.config.sim_start, self.config.sim_end
+            df_jobs.End.max(), self.config.nodes_down_in_blades,
+            # Resolved by the data reader: equal to the config values when set,
+            # otherwise derived from the job dump
+            self.data_reader.sim_start, self.data_reader.sim_end
         )
         """
         Get node and partition data

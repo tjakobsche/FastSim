@@ -100,6 +100,8 @@ defaults = {
     "max_switch_nodes" : 256, # Maximum size of a job that might be constrained by max_switch_wait
     "impromptu_reservation_names" : [], # Reservation names treated as reactive holds (no advance draining)
     "save_interval_steps" : 50000, # How many steps elapse between saving intermediate results
+    "sim_start" : None, # Start of the simulated window; None = derived from the job dump (min Submit)
+    "sim_end" : None, # End of the simulated window; None = derived from the job dump (max End + 1 day)
 }
 
 
@@ -125,7 +127,6 @@ mandatory_fields = set(
         "resv_dump_current", "resv_dump_historic",
         "job_dump", "slurm_conf",
         "considered_partitions", "qos_dump",
-        "sim_start", "sim_end"
     )
 )
 

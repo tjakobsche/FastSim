@@ -583,7 +583,22 @@ class SlurmDataReader:
         df_jobs.End = pd.to_datetime(df_jobs.End, format="%Y-%m-%dT%H:%M:%S")
         df_jobs.Elapsed = df_jobs.End - df_jobs.Start
         df_jobs.Timelimit = df_jobs.Timelimit.apply(lambda row: timelimit_str_to_timedelta(row))
-        
+
+        # Derive the sim window from the trace when it isn't configured: the
+        # whole job dump is simulated from first submission to last completion.
+        # Stored on the reader so later stages (node events, reservations) use
+        # the same resolved window.
+        if sim_start is None:
+            # Just before the first submission, so no job is folded into the
+            # initial running/queued state — every job is a submission event
+            sim_start = df_jobs.Submit.min() - timedelta(seconds=1)
+            print_and_log(logger, f"sim_start not set, derived from job dump: {sim_start}")
+        if sim_end is None:
+            sim_end = df_jobs.End.max() + timedelta(days=1)
+            print_and_log(logger, f"sim_end not set, derived from job dump: {sim_end}")
+        self.sim_start = sim_start = pd.to_datetime(sim_start)
+        self.sim_end = sim_end = pd.to_datetime(sim_end)
+
         if initialize:
             # Filtering jobs to include only jobs starting after sim start date
             # Jobs that are running must have already started but not yet ended
