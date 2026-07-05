@@ -102,16 +102,18 @@ class SlurmDataReader:
             usecols=["NodeName", "TimeStart", "TimeEnd", "State", "Reason"]
         )
 
-        # Clean events data and filter events by date (if looking at a subset of jobs for simulation) 
+        # Clean events data and filter events by date (if looking at a subset of jobs for simulation)
         # Filter events by TimeEnd, otherwise the simulator will erroneously place nodes in Down state for past events.
+        # The timestamps must be parsed before the sim_start filter: comparing
+        # the raw string column against a Timestamp raises a TypeError.
         df_events = df_events.loc[
-            ((df_events.NodeName.notna()) & 
-             (df_events.TimeStart != "Unknown") & 
-             (df_events.TimeEnd >= sim_start))
+            ((df_events.NodeName.notna()) &
+             (df_events.TimeStart != "Unknown"))
         ]
 
         df_events.TimeStart = pd.to_datetime(df_events.TimeStart, format="%Y-%m-%dT%H:%M:%S")
         df_events.TimeEnd = pd.to_datetime(df_events.TimeEnd, format="%Y-%m-%dT%H:%M:%S")
+        df_events = df_events.loc[df_events.TimeEnd >= sim_start]
         df_events["Duration"] = df_events.apply(lambda row: (row.TimeEnd - row.TimeStart), axis=1)
         df_events.State = df_events.State.apply(lambda state: "DRAIN" if "DRAIN" in state else "DOWN")
         df_events["Id"] = df_events.NodeName
