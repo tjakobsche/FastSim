@@ -444,6 +444,13 @@ class Controller:
         """
         Keeping track of when the Backfilling loop is active (True) or sleeping (False)
         """
+
+        self._rel_secs_cache = {}
+        """
+        Cache of datetime -> seconds-since-sched_start floats used by _prep_bf_map.
+        Interval endpoints repeat across backfill cycles, so each datetime is
+        converted once instead of building a timedelta per block per cycle.
+        """
         
         self.bf_try_per_lock_hold = int(
             self.config.bf_yield_interval.total_seconds() * self.config.approx_bf_try_per_sec
@@ -1300,6 +1307,20 @@ class Controller:
         bf_end_padding = self.bf_end_padding
         bf_max_relevant_start = self.bf_max_relevant_start
 
+        # Convert datetimes to cached seconds-since-sched_start floats and
+        # subtract those instead of building a timedelta per block per cycle.
+        # Job timestamps are whole seconds, which floats represent exactly, so
+        # the float arithmetic below equals the timedelta arithmetic it
+        # replaces. datetime.max is special-cased (it is not a whole second).
+        rel_secs = self._rel_secs_cache
+        if len(rel_secs) > 2_000_000:
+            rel_secs.clear() # Bound memory on very long runs; entries rebuild lazily
+        sched_start = self.sched_start
+        dt_max = datetime.datetime.max
+        now_s = rel_secs.get(now)
+        if now_s is None:
+            now_s = rel_secs[now] = (now - sched_start).total_seconds()
+
         # Look through all free blocks (reservation, ((interval_0, node_set_0), ... (interval_n, node_set_n)))
         for resv, free_block in self.partitions.free_blocks.items():
             self.bf_free_blocks[resv] = defaultdict(set)
@@ -1316,14 +1337,18 @@ class Controller:
                 # Get the end of the Backfill interval
                 # If the interval end time is the datetime.max
                 # then this Backfill interval end time is the end of the Backfill window
-                if interval[1] == datetime.datetime.max:
+                end = interval[1]
+                if end == dt_max:
                     interval_f = bf_window
                 else:
                     # Otherwise, it is either the end of the Backfill window or the end of the interval,
                     # whichever is earlier (remembering the interval time is relative to the current time)
-                    interval_f = min(
-                        (interval[1] - now).total_seconds(), bf_window
-                    )
+                    end_s = rel_secs.get(end)
+                    if end_s is None:
+                        end_s = rel_secs[end] = (end - sched_start).total_seconds()
+                    interval_f = end_s - now_s
+                    if interval_f > bf_window:
+                        interval_f = bf_window
 
                 # Get the beginning of the Backfill interval
                 # If the beginning of the interval is before the current time
@@ -1335,13 +1360,15 @@ class Controller:
                         if running_job is not None:
                             interval_i = job_interval_i.get(running_job)
                             if interval_i is None:
-                                interval_i = max(
-                                    (
-                                        (running_job.endlimit - now).total_seconds() +
-                                        bf_end_padding
-                                    ),
-                                    1
-                                )
+                                endlimit = running_job.endlimit
+                                end_s = rel_secs.get(endlimit)
+                                if end_s is None:
+                                    end_s = rel_secs[endlimit] = (
+                                        (endlimit - sched_start).total_seconds()
+                                    )
+                                interval_i = end_s - now_s + bf_end_padding
+                                if interval_i < 1:
+                                    interval_i = 1
                                 job_interval_i[running_job] = interval_i
                         else:
                             interval_i = 0
@@ -1361,13 +1388,21 @@ class Controller:
 
                 else: # (the beginning of the interval is later than the current time)
                     # Make the beginning of the Backfill interval relative to the current time
-                    interval_i = (interval[0] - now).total_seconds()
+                    start = interval[0]
+                    start_s = rel_secs.get(start)
+                    if start_s is None:
+                        start_s = rel_secs[start] = (start - sched_start).total_seconds()
+                    interval_i = start_s - now_s
                     # Skip this interval if it begins after the end of the Backfill window
                     if interval_i >= bf_window:
                         continue
 
                     # Add this node to this Backfill interval
-                    bf_free_blocks[(interval_i, interval_f)].update(nodes)
+                    block = bf_free_blocks.get((interval_i, interval_f))
+                    if block is None:
+                        bf_free_blocks[(interval_i, interval_f)] = set(nodes)
+                    else:
+                        block.update(nodes)
 
                     # If the beginning of the interval is before the maximum relevant start time,
                     # then we will include this node in our backfilling search.
