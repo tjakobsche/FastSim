@@ -39,6 +39,10 @@ import traceback
 import logging
 
 import bisect
+from operator import attrgetter
+
+# Equivalent to sorting by (node.weight, node.nid) — see Node.sched_order
+_sched_order_key = attrgetter("sched_order")
 
 import signal
 
@@ -1016,7 +1020,7 @@ class Controller:
                         for node in nodes
                             if node.running_job is None
                 ]
-            free_nodes_ready_now.sort(key=lambda node: (node.weight, node.nid))
+            free_nodes_ready_now.sort(key=_sched_order_key)
 
             # If there are no available nodes, we can't allocate any nodes for jobs
             if not free_nodes_ready_now:
@@ -1086,7 +1090,7 @@ class Controller:
 
                     # Submit the job
                     # self._submit(job.start_job(self.time), valid_nodes)
-                    ordered_nodes = sorted(valid_nodes, key=lambda n: (n.weight, n.nid))
+                    ordered_nodes = sorted(valid_nodes, key=_sched_order_key)
                     self._submit(job.start_job(self.time), ordered_nodes)
                     jobs_submitted.append(i_job)
                 else:
@@ -1140,7 +1144,7 @@ class Controller:
         if not free_nodes_ready_now:
             return
 
-        free_nodes_ready_now.sort(key=lambda node: (node.weight, node.nid))
+        free_nodes_ready_now.sort(key=_sched_order_key)
 
         jobs_submitted, jobs_cancelled, partitions_failed = [], [], set()
         i_job = len(self.queue.queue)
@@ -1214,7 +1218,7 @@ class Controller:
 
                 # Submit the job
                 # self._submit(job.start_job(self.time), valid_nodes)
-                ordered_nodes = sorted(valid_nodes, key=lambda n: (n.weight, n.nid))
+                ordered_nodes = sorted(valid_nodes, key=_sched_order_key)
                 self._submit(job.start_job(self.time), ordered_nodes)
                 jobs_submitted.append(i_job)
 
@@ -1659,12 +1663,12 @@ class Controller:
                     if usage_block_start <= self.bf_secs_past:
                         selected_nodes.sort(
                             key=lambda node: (
-                                node.running_job is not None, node.weight, node.nid
+                                node.running_job is not None, node.sched_order
                             ),
                             reverse=True
                         )
                     else:
-                        selected_nodes.sort(key=lambda node: (node.weight, node.nid), reverse=True)
+                        selected_nodes.sort(key=_sched_order_key, reverse=True)
 
                     # Select only as many nodes as we need
                     selected_nodes = selected_nodes[len(selected_nodes)-job.nodes:]
@@ -1994,7 +1998,7 @@ class Controller:
                             if n.running_job is None and
                             job.partition.name in n.partition_names and
                             self.time + remaining_time <= n.interval_times[-1]]
-        return min(candidates, key=lambda n: (n.weight, n.nid), default=None)
+        return min(candidates, key=_sched_order_key, default=None)
 
 
     def _check_reservations(self):

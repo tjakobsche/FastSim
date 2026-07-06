@@ -105,6 +105,12 @@ class Partitions:
         for partition in self.partitions:
             partition.nodes.sort(key=lambda node: (node.weight, node.nid)) # Small weights get priority
 
+        # The schedulers repeatedly sort node lists by (weight, nid), which is
+        # static — precompute each node's rank once so those sorts can compare
+        # a single int instead of building a (int, str) tuple per node.
+        for order, node in enumerate(sorted(self.nodes, key=lambda node: (node.weight, node.nid))):
+            node.sched_order = order
+
         print_and_log(logger, "Using partitions:")
         print_and_log(logger, ' Partition Name | Priority Tier | Priority Weight | # of Nodes Available ')
         for partition in self.partitions:
@@ -302,7 +308,14 @@ class Node:
         ]
 
         # TODO: Need to return to this for documentation
-        self.bf_free_blocks_start = None 
+        self.bf_free_blocks_start = None
+
+        self.sched_order = None
+        """
+        Rank of this node in the static (weight, nid) scheduling order,
+        assigned by Partitions.__init__. Sorting by it is equivalent to
+        sorting by (weight, nid) but much cheaper.
+        """
 
     def __hash__(self):
         return self._stable_hash
