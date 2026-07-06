@@ -17,3 +17,6 @@ __pycache__
 
 *.csv
 *.pkl
+
+# Generated synthetic regression workloads live here by default
+/synthetic_workload/
