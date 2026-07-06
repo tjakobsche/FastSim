@@ -1514,14 +1514,25 @@ class Controller:
         self.sched_backfill_num += len(backfill_now)
 
         
+        started_by_queue = {}
         for job, nodes in backfill_now:
-            queue = (
-                self.queue.reservations[job.reservation] if job.reservation else self.queue.queue
-            )
-            # Remove the job from the relevant queue
-            queue.remove(job)
+            started = started_by_queue.get(job.reservation)
+            if started is None:
+                started = started_by_queue[job.reservation] = set()
+            started.add(job)
             # start the job on the selected nodes
             self._submit(job.start_job(self.time), nodes)
+
+        # Remove the started jobs from each queue in a single pass rather than
+        # one linear scan per job
+        for resv, started in started_by_queue.items():
+            queue = self.queue.reservations[resv] if resv else self.queue.queue
+            remaining = [job for job in queue if job not in started]
+            if len(remaining) != len(queue) - len(started):
+                raise ValueError(
+                    "Backfilled job(s) missing from queue {!r}".format(resv)
+                )
+            queue[:] = remaining
 
     def _get_backfill_jobs(self, n_try):
         """

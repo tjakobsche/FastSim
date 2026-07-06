@@ -467,10 +467,13 @@ class Queue:
             # If the job is waiting on a dependency, remove it from the list
             self.waiting_dependency.remove(job)
         elif job.reservation == "":
-            # If there is no associated reservation, remove the job from the main queue
-            if job not in self.queue:
+            # If there is no associated reservation, remove the job from the main queue.
+            # A single remove doubles as the membership check to avoid scanning twice.
+            try:
+                self.queue.remove(job)
+            except ValueError:
                 print_and_log(logger, 'Cannot find job:', job.jid)
-            self.queue.remove(job)
+                raise
         else:
             # If there is an associated reservation, remove the job from the reservation queue
             self.reservations[job.reservation].remove(job)
