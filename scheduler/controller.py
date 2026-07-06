@@ -547,10 +547,10 @@ class Controller:
         saving checkpoints of the simulation results.
         """
 
-        self.previous_print_hour = self.time.hour
+        self._next_status_time = None
         """
-        Keeps track of the last time stats were printed. This is 
-        only used for outputting results to the terminal.
+        Simulated time of the next periodic status output. This is
+        only used for outputting results to the terminal and logs.
         """
 
         self.sched_backfill_num = 0
@@ -740,14 +740,23 @@ class Controller:
             self.planned_nodes = set(node for node in self.planned_nodes if node.free)
             self.idle_nodes = set(node for node in self.partitions.nodes if node.free and node not in self.planned_nodes)
 
-            print((f"Running Nodes: {self.running_nodes:4d} " +
-                   f"Down Nodes: {len(self.down_nodes):4d} " +
-                   f"Planned Nodes: {len(self.planned_nodes):4d} " +
-                   f"Idle Nodes: {len(self.idle_nodes):4d} " +
-                   f"Step: {self.step_cnt} " +
-                   f"Time: {self.time.strftime('%Y-%m-%d %H:%M:%S')} "), end='\r')
-            
-            self.sreport_log.info(f"{self.time},{self.running_nodes},{len(self.down_nodes)},{len(self.planned_nodes)},{len(self.idle_nodes)}")
+            # Periodic status output (terminal line, stats table, sreport row),
+            # throttled to status_interval of simulated time (0 disables it).
+            # Emitting it every step slowed busy simulations down noticeably.
+            if self.config.status_interval and (
+                    self._next_status_time is None or self.time >= self._next_status_time):
+                self._next_status_time = self.time + timedelta(seconds=self.config.status_interval)
+
+                print((f"Running Nodes: {self.running_nodes:4d} " +
+                       f"Down Nodes: {len(self.down_nodes):4d} " +
+                       f"Planned Nodes: {len(self.planned_nodes):4d} " +
+                       f"Idle Nodes: {len(self.idle_nodes):4d} " +
+                       f"Step: {self.step_cnt} " +
+                       f"Time: {self.time.strftime('%Y-%m-%d %H:%M:%S')} "), end='\r')
+
+                self.sreport_log.info(f"{self.time},{self.running_nodes},{len(self.down_nodes)},{len(self.planned_nodes)},{len(self.idle_nodes)}")
+
+                self._print_stats()
 
             # Checkpoint every interval
             if self.step_cnt % self.config.save_interval_steps == 0:
@@ -865,7 +874,6 @@ class Controller:
 
         self.running_nodes = sum([job.nodes for job in self.running_jobs])
         self.log_simulation_step_power()
-        self._print_stats() # Comment out for optimization
 
     def _submit(self, job, nodes):
         """
@@ -2196,10 +2204,8 @@ class Controller:
 
 
     def _print_stats(self):
-        # Print once per hour
-        if getattr(self, "previous_print_hour", None) == self.time.hour:
-            return
-        self.previous_print_hour = self.time.hour
+        # Called from the status block in run_sim, which already throttles
+        # to status_interval of simulated time.
 
         # Console that can also export plain text for logging
         if not hasattr(self, "_console"):

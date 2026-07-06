@@ -100,6 +100,7 @@ defaults = {
     "max_switch_nodes" : 256, # Maximum size of a job that might be constrained by max_switch_wait
     "impromptu_reservation_names" : [], # Reservation names treated as reactive holds (no advance draining)
     "save_interval_steps" : 50000, # How many steps elapse between saving intermediate results
+    "status_interval" : 3600, # Simulated seconds between status outputs (terminal line, stats table, sreport row); 0 disables them
     "sim_start" : None, # Start of the simulated window; None = derived from the job dump (min Submit)
     "sim_end" : None, # End of the simulated window; None = derived from the job dump (max End + 1 day)
 }
