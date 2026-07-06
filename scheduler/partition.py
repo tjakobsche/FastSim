@@ -102,6 +102,9 @@ class Partitions:
             # Add this Node object to the set of all nodes.
             self.nodes.append(node)
 
+        for partition in self.partitions:
+            partition.nodes.sort(key=lambda node: (node.weight, node.nid)) # Small weights get priority
+
         print_and_log(logger, "Using partitions:")
         print_and_log(logger, ' Partition Name | Priority Tier | Priority Weight | # of Nodes Available ')
         for partition in self.partitions:
@@ -199,8 +202,8 @@ class Partition:
         node.partitions.append(self) # Add this partition to the node's list of partitions it is available to
         node.partition_names.append(self.name) # Add the name of this partition to the node's list of partitions it is available to
         self.nodes.append(node) # Add this node to the list of nodes available to this partition
-        # does this still need to be sorted? can it just be a set
-        self.nodes.sort(key=lambda node: (node.weight, node.nid)) # Small weights get priority
+        # Partitions.__init__ sorts self.nodes once after all nodes are added
+        # (re-sorting on every add was quadratic in cluster size)
 
 
 class Node:
