@@ -778,6 +778,11 @@ class Controller:
                                 continue
                             elif key in ['qos','partition','partition_qos']:
                                 job_dict[key] = value.name
+                            elif key == 'state':
+                                # Store the plain string (e.g. "COMPLETED") so the
+                                # pickle can be read without FastSim's modules on
+                                # sys.path (same fix as the end-of-run dump in main.py)
+                                job_dict[key] = value.name
                             elif key == 'assigned_nodes':
                                 job_dict[key] = set(node.nid for node in value)
                             elif key == 'node_timeline':
