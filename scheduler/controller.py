@@ -781,7 +781,8 @@ class Controller:
                     try:
                         job_dict = dict()
                         for key, value in job.__dict__.items():
-                            if key == 'assoc':
+                            # Private attributes are internal caches, not results
+                            if key == 'assoc' or key.startswith('_'):
                                 continue
                             elif key in ['qos','partition','partition_qos']:
                                 job_dict[key] = value.name

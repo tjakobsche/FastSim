@@ -28,6 +28,7 @@ import hashlib
 import pandas as pd
 
 from aux_funcs import mark_skip, print_and_log
+from priority_sorters import PRIO_EPOCH
 
 import logging
 
@@ -1150,6 +1151,19 @@ class Job:
         submitted, starts running, or finishes.
         """
 
+        self._mf_static = None
+        """
+        Per-job constant factor values (size, partition, QOS) cached by the
+        specialized sort key in MFPrioritySorter._fast_sort.
+        """
+
+        self._neg_submit_s = None
+        self._launch_s = None
+        """
+        Negated submit time and launch time as float-seconds offsets from
+        PRIO_EPOCH, set by priority() and read by the specialized sort key.
+        """
+
 
 
     def __hash__(self):
@@ -1298,6 +1312,11 @@ class Job:
                 self.launch_time = self.submit_priority
             else:
                 self.launch_time = time
+        # Refresh the float-seconds offsets used by the specialized sort key.
+        # Recomputed on every call because submit may have been reset by a
+        # QOS-hold release since the last time this job was queued.
+        self._neg_submit_s = -(self.submit - PRIO_EPOCH).total_seconds()
+        self._launch_s = (self.launch_time - PRIO_EPOCH).total_seconds()
         return self
 
 

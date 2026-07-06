@@ -20,8 +20,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import datetime
+
 import numpy as np
 import pandas as pd
+
+PRIO_EPOCH = datetime.datetime(2000, 1, 1)
+"""
+Fixed reference time for the cached float-seconds timestamps used by the
+specialized sort key. Trace timestamps are whole seconds, so offsets from
+this epoch are exact floats and float subtraction reproduces
+timedelta.total_seconds() bit-for-bit.
+"""
 
 class MFPrioritySorter:
     """
@@ -144,6 +154,20 @@ class MFPrioritySorter:
         if power_weight > 0:
             self.priority_factors.append(self._power_priority)
 
+        self._fast_key_active = (
+            None
+            if power_weight > 0
+            else (
+                bool(size_weight), bool(age_weight), bool(fairshare_weight),
+                bool(partition_weight), bool(qos_weight)
+            )
+        )
+        """
+        Frozen activation flags (size, age, fairshare, partition, qos) for the
+        specialized sort key used by _fast_sort. None disables the fast path
+        (the energy-aware factor is not specialized).
+        """
+
     def sort(self, queue, time):
         """
         Sort the queue based on the Multifactor Priority of each job.
@@ -156,6 +180,9 @@ class MFPrioritySorter:
         - The unique job ID
         """
         self.time = time
+        if self._fast_key_active is not None:
+            self._fast_sort(queue, time)
+            return
         if self.no_partition_priority_tiers:
             queue.sort(
                 key=lambda job: (
@@ -177,7 +204,74 @@ class MFPrioritySorter:
             )
         )
         return
-    
+
+    def _fast_sort(self, queue, time):
+        """
+        Sort with a specialized key that orders identically to the generic
+        multifactor key while avoiding per-job Python calls and datetime
+        arithmetic.
+
+        Equivalences relied on:
+        - The per-job constant factor values (size, partition, QOS) are cached
+          on the job the first time it is sorted, using the exact formulas of
+          the corresponding _*_priority methods.
+        - The age factor uses float-seconds offsets from PRIO_EPOCH cached by
+          Job.priority(); the subtraction is bit-equal to
+          (time - launch_time).total_seconds() for whole-second timestamps.
+        - The factor values are added left to right in the same order as the
+          generic sum([...]), so the total is bit-equal.
+        - The (time - submit) tie-break is replaced by the negated submit
+          offset, which orders identically at fixed time.
+        """
+        use_size, use_age, use_fairshare, use_partition, use_qos = self._fast_key_active
+        time_s = (time - PRIO_EPOCH).total_seconds()
+        size_weight = self.size_weight
+        age_weight, max_age = self.age_weight, self.max_age
+        fairshare_weight = self.fairshare_weight
+        partition_weight = self.partition_weight
+        qos_weight = self.qos_weight
+        assocs = self.fairtree.assocs if use_fairshare else None
+        tiered = not self.no_partition_priority_tiers
+
+        if not (use_size or use_age or use_fairshare or use_partition or use_qos):
+            # No active factors: the priority sum is a constant, so order is
+            # (wait time, unique ID), i.e. (negated submit offset, unique ID)
+            if tiered:
+                queue.sort(
+                    key=lambda job: (
+                        job.partition.priority_tier, job._neg_submit_s, job.uniq_id
+                    )
+                )
+            else:
+                queue.sort(key=lambda job: (job._neg_submit_s, job.uniq_id))
+            return
+
+        def multifactor_key(job):
+            static = job._mf_static
+            if static is None:
+                static = job._mf_static = (
+                    min(job.nodes / 256, 1) * size_weight,
+                    job.partition.priority_weight * partition_weight,
+                    job.qos.priority * qos_weight,
+                )
+            prio = 0
+            if use_size:
+                prio = prio + static[0]
+            if use_age:
+                prio = prio + min((time_s - job._launch_s) / max_age, 1) * age_weight
+            if use_fairshare:
+                prio = prio + assocs[job.assoc].fairshare_factor * fairshare_weight
+            if use_partition:
+                prio = prio + static[1]
+            if use_qos:
+                prio = prio + static[2]
+            if tiered:
+                return (job.partition.priority_tier, prio, job._neg_submit_s, job.uniq_id)
+            return (prio, job._neg_submit_s, job.uniq_id)
+
+        queue.sort(key=multifactor_key)
+
+
     def _partition_priority_tier(self, job):
         """
         Returns the priority tier of the job's partition.
